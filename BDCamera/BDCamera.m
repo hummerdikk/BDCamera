@@ -56,13 +56,14 @@
 #pragma mark - Initialize methods -
 - (instancetype)initWithPreviewView:(UIView *)previewView
 {
-    return [self initWithPreviewView:previewView preset:AVCaptureSessionPresetInputPriority];
+    return [self initWithPreviewView:previewView preset:AVCaptureSessionPresetInputPriority Mic:NO];
 }
 
-- (instancetype)initWithPreviewView:(UIView *)previewView preset:(NSString *)capturePreset
+- (instancetype)initWithPreviewView:(UIView *)previewView preset:(NSString *)capturePreset Mic:(BOOL)mic
 {
     self = [self init];
     if (self) {
+        _useMic = mic;
         [self constructWithView:previewView preset:capturePreset];
     }
     return self;
@@ -92,10 +93,12 @@
     
     self.defaultFormat = self.videoDevice.activeFormat;
     self.defaultVideoMaxFrameDuration = self.videoDevice.activeVideoMaxFrameDuration;
-    
-    AVCaptureDevice *audioDevice = [AVCaptureDevice defaultDeviceWithMediaType:AVMediaTypeAudio];
-    AVCaptureDeviceInput *audioIn = [AVCaptureDeviceInput deviceInputWithDevice:audioDevice error:&error];
-    [self.captureSession addInput:audioIn];
+
+    if(_useMic) {
+        AVCaptureDevice *audioDevice = [AVCaptureDevice defaultDeviceWithMediaType:AVMediaTypeAudio];
+        AVCaptureDeviceInput *audioIn = [AVCaptureDeviceInput deviceInputWithDevice:audioDevice error:&error];
+        [self.captureSession addInput:audioIn];
+    }
     
     self.fileOutput = [[AVCaptureMovieFileOutput alloc] init];
     [self.captureSession addOutput:self.fileOutput];

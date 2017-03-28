@@ -35,7 +35,7 @@
 
 - (id)initWithPreviewView:(UIView *)previewView preset:(NSString *)capturePreset
 {
-    self = [super initWithPreviewView:previewView preset:capturePreset];
+    self = [super initWithPreviewView:previewView preset:capturePreset Mic:NO];
     if (self) {
         [self.captureSession beginConfiguration];
         
