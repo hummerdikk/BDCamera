@@ -40,6 +40,7 @@
 @property (nonatomic, strong, readonly) CIContext *ciContext;
 @property (nonatomic, strong, readonly) EAGLContext *eaglContext;
 @property (nonatomic) BOOL useMic;
+@property (nonatomic) BOOL useFileOutput;
 
 /*
     Every item in this array should be BDLivePreview for render live preview
@@ -78,8 +79,8 @@
 /*
  Initializers
  */
-- (instancetype)initWithPreviewView:(UIView *)previewView preset:(NSString *)capturePreset microphoneRequired:(BOOL)mic frameWithCompletition:(void (^)(UIImage *, NSError *))completion;
-- (instancetype)initWithPreviewView:(UIView *)previewView preset:(NSString *)capturePreset microphoneRequired:(BOOL)mic;
+- (instancetype)initWithPreviewView:(UIView *)previewView preset:(NSString *)capturePreset microphoneRequired:(BOOL)mic fileOutputRequired:(BOOL)fout frameWithCompletition:(void (^)(UIImage *, NSError *))completion;
+- (instancetype)initWithPreviewView:(UIView *)previewView preset:(NSString *)capturePreset microphoneRequired:(BOOL)mic fileOutputRequired:(BOOL)fout;
 - (instancetype)initWithPreviewView:(UIView *)previewView;
 
 

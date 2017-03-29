@@ -35,8 +35,12 @@
 
 - (id)initWithPreviewView:(UIView *)previewView preset:(NSString *)capturePreset
 {
-    self = [super initWithPreviewView:previewView preset:capturePreset microphoneRequired:NO];
-    if (self) {
+    self = [super initWithPreviewView:previewView
+							   preset:capturePreset
+				   microphoneRequired:NO
+				   fileOutputRequired:NO];
+	
+	if (self) {
         [self.captureSession beginConfiguration];
         
         self.photoOutput = [[AVCaptureStillImageOutput alloc] init];

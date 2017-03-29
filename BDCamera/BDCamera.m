@@ -48,7 +48,7 @@
 @property (nonatomic, assign) CMTime defaultVideoMaxFrameDuration;
 @property (nonatomic, strong) NSString *capturePreset;
 @property (nonatomic, strong) dispatch_queue_t captureSessionQueue;
-@property (nonatomic, assign) CMVideoDimensions currentVideoDimensions;
+//@property (nonatomic, assign) CMVideoDimensions currentVideoDimensions;
 
 @property (nonatomic, assign) BOOL isFaceCamera;
 
@@ -63,23 +63,26 @@
     return [self initWithPreviewView:previewView
 							  preset:AVCaptureSessionPresetInputPriority
 				  microphoneRequired:NO
+				  fileOutputRequired:NO
 			   frameWithCompletition:nil];
 }
 
-- (instancetype)initWithPreviewView:(UIView *)previewView preset:(NSString *)capturePreset microphoneRequired:(BOOL)mic
+- (instancetype)initWithPreviewView:(UIView *)previewView preset:(NSString *)capturePreset microphoneRequired:(BOOL)mic fileOutputRequired:(BOOL)fout
 {
 	return [self initWithPreviewView:previewView
 							  preset:capturePreset
 				  microphoneRequired:mic
+				  fileOutputRequired:fout
 			   frameWithCompletition:nil];
 }
 
-- (instancetype)initWithPreviewView:(UIView *)previewView preset:(NSString *)capturePreset microphoneRequired:(BOOL)mic frameWithCompletition:(void (^)(UIImage *, NSError *))completion {
+- (instancetype)initWithPreviewView:(UIView *)previewView preset:(NSString *)capturePreset microphoneRequired:(BOOL)mic fileOutputRequired:(BOOL)fout frameWithCompletition:(void (^)(UIImage *, NSError *))completion {
 	
 	self = [super init];
 	
 	if (self) {
 		_useMic = mic;
+		_useFileOutput = fout;
 		handler = completion;
 		convertBufferToUIImage = NO;
 		[self constructWithView:previewView preset:capturePreset];
@@ -119,25 +122,30 @@
     self.defaultFormat = self.videoDevice.activeFormat;
     self.defaultVideoMaxFrameDuration = self.videoDevice.activeVideoMaxFrameDuration;
 
-    if(_useMic) {
+    if (_useMic) {
         AVCaptureDevice *audioDevice = [AVCaptureDevice defaultDeviceWithMediaType:AVMediaTypeAudio];
         AVCaptureDeviceInput *audioIn = [AVCaptureDeviceInput deviceInputWithDevice:audioDevice error:&error];
         [self.captureSession addInput:audioIn];
     }
-    
-    self.fileOutput = [[AVCaptureMovieFileOutput alloc] init];
-    [self.captureSession addOutput:self.fileOutput];
-    
+	
     NSDictionary *outputSettings = @{ (id)kCVPixelBufferPixelFormatTypeKey : [NSNumber numberWithInteger:kCVPixelFormatType_32BGRA]};
-    self.videoDataOutput = [[AVCaptureVideoDataOutput alloc] init];
+	
+	self.videoDataOutput = [[AVCaptureVideoDataOutput alloc] init];
     self.videoDataOutput.videoSettings = outputSettings;
-    [_captureSession addOutput:self.videoDataOutput];
-    
+	
+	[_captureSession addOutput:self.videoDataOutput];
+
+	if (_useFileOutput) {
+		self.fileOutput = [[AVCaptureMovieFileOutput alloc] init];
+		[self.captureSession addOutput:self.fileOutput];
+	}
+	
     self.previewLayer = [[AVCaptureVideoPreviewLayer alloc] initWithSession:self.captureSession];
     self.previewLayer.frame = view.bounds;
     self.previewLayer.contentsGravity = kCAGravityResizeAspectFill;
     self.previewLayer.videoGravity = AVLayerVideoGravityResizeAspectFill;
-    [view.layer insertSublayer:self.previewLayer atIndex:0];
+	
+	[view.layer insertSublayer:self.previewLayer atIndex:0];
     
     [self.captureSession commitConfiguration];
     
@@ -391,63 +399,35 @@
 #pragma mark - CaptureBuffer
 - (void)captureOutput:(AVCaptureOutput *)captureOutput didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer fromConnection:(AVCaptureConnection *)connection
 {
-    CMFormatDescriptionRef formatDesc = CMSampleBufferGetFormatDescription(sampleBuffer);
-    _currentVideoDimensions = CMVideoFormatDescriptionGetDimensions(formatDesc);
-    
-    CVImageBufferRef imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer);
-    CIImage *sourceImage = [CIImage imageWithCVPixelBuffer:(CVPixelBufferRef)imageBuffer options:nil];
-    
-    if (self.isFaceCamera) {
-       sourceImage = [sourceImage imageByApplyingTransform:CGAffineTransformTranslate(CGAffineTransformMakeScale(1, -1), 0, sourceImage.extent.size.height)];
-    }
 	
-	if (convertBufferToUIImage) {
+	if (!convertBufferToUIImage) return;
+	
+	CVImageBufferRef imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer);
+	CIImage *sourceImage = [CIImage imageWithCVPixelBuffer:(CVPixelBufferRef)imageBuffer options:nil];
+	
+	convertBufferToUIImage = NO;
+	
+	CVPixelBufferRef pixelBuffer = (CVPixelBufferRef)imageBuffer;
+	
+	CIContext *context = [CIContext contextWithOptions:nil];
+	CGImageRef myImage = [context
+						  createCGImage:sourceImage
+						  fromRect:CGRectMake(0, 0,
+											  CVPixelBufferGetWidth(pixelBuffer),
+											  CVPixelBufferGetHeight(pixelBuffer))];
+	
+	UIImage *image = [UIImage imageWithCGImage:myImage];
+	
+	CGImageRelease(myImage);
+	
+	dispatch_async(dispatch_get_main_queue(), ^(void) {
 		
-		convertBufferToUIImage = NO;
-		
-		NSData *imageData = [AVCaptureStillImageOutput jpegStillImageNSDataRepresentation:sampleBuffer];
-		
-		UIImage *image = [[UIImage alloc] initWithData:imageData];
-		
-		dispatch_async(dispatch_get_main_queue(), ^(void) {
+		if (image) {
 			handler(image,nil);
-		});
-	}
-	
-    CGRect sourceExtent = sourceImage.extent;
-    CGFloat sourceAspect = sourceExtent.size.width / sourceExtent.size.height;
-    
-    for (id view in self.displayedPreviews) {
-        BOOL viewIsGLKView = [view isKindOfClass:[BDLivePreview class]] == YES;
-        NSAssert(viewIsGLKView, @"[BDCamera] -> Feed view should be GLKView or BDLivePreview");
-        
-        BDLivePreview *feedView = (BDLivePreview *)view;
-        CGFloat previewAspect = feedView.drawableWidth  / feedView.drawableHeight;
-        CGRect drawRect = sourceExtent;
-        if (sourceAspect > previewAspect) {
-            drawRect.origin.x += (drawRect.size.width - drawRect.size.height * sourceAspect) / 2.0;
-            drawRect.size.width = drawRect.size.height * sourceAspect;
-        } else {
-            drawRect.origin.y += (drawRect.size.height - drawRect.size.width / previewAspect) / 2.0;
-            drawRect.size.height = drawRect.size.width / previewAspect;
-        }
-        
-        [feedView bindDrawable];
-        
-        if (_eaglContext != [EAGLContext currentContext]) {
-            [EAGLContext setCurrentContext:_eaglContext];
-        }
-        
-        glClearColor(0.5, 0.5, 0.5, 1.0);
-        glClear(GL_COLOR_BUFFER_BIT);
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-        
-        if (sourceImage) {
-            [_ciContext drawImage:sourceImage inRect:CGRectMake(0, 0, feedView.drawableWidth, feedView.drawableHeight) fromRect:drawRect];
-        }
-        [feedView display];
-    }
+		} else {
+			handler(nil, [NSError errorWithDomain:@"image is nil" code:1 userInfo:nil]);
+		}
+	});
 }
 
 - (void)takeAFrameFromSampleBuffer {
