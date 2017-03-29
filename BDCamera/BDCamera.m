@@ -60,34 +60,48 @@
 
 - (instancetype)initWithPreviewView:(UIView *)previewView
 {
-    return [self initWithPreviewView:previewView preset:AVCaptureSessionPresetInputPriority microphoneRequired:NO frameWithCompletition:nil];
+    return [self initWithPreviewView:previewView
+							  preset:AVCaptureSessionPresetInputPriority
+				  microphoneRequired:NO
+			   frameWithCompletition:nil];
 }
 
 - (instancetype)initWithPreviewView:(UIView *)previewView preset:(NSString *)capturePreset microphoneRequired:(BOOL)mic
 {
-	return [self initWithPreviewView:previewView preset:capturePreset microphoneRequired:mic frameWithCompletition:nil];
+	return [self initWithPreviewView:previewView
+							  preset:capturePreset
+				  microphoneRequired:mic
+			   frameWithCompletition:nil];
 }
 
 - (instancetype)initWithPreviewView:(UIView *)previewView preset:(NSString *)capturePreset microphoneRequired:(BOOL)mic frameWithCompletition:(void (^)(UIImage *, NSError *))completion {
 	
-	self = [self init];
+	self = [super init];
+	
 	if (self) {
 		_useMic = mic;
 		handler = completion;
 		convertBufferToUIImage = NO;
 		[self constructWithView:previewView preset:capturePreset];
 	}
+	
 	return self;
 }
 
 - (void)constructWithView:(UIView *)view preset:(NSString *)capturePreset
 {
+	
     self.isFaceCamera = NO;
-    NSError *error;
-    _captureSessionQueue = dispatch_queue_create("capture_session_queue", NULL);
-    self.capturePreset = capturePreset;
-    self.captureSession = [[AVCaptureSession alloc] init];
-    self.captureSession.sessionPreset = capturePreset;
+	
+	NSError *error = nil;
+	
+	_captureSessionQueue = dispatch_queue_create("capture_session_queue", NULL);
+	
+	self.capturePreset = capturePreset;
+	
+	self.captureSession = [[AVCaptureSession alloc] init];
+	
+	self.captureSession.sessionPreset = capturePreset;
     
     self.videoDevice = [AVCaptureDevice defaultDeviceWithMediaType:AVMediaTypeVideo];
     self.videoInput = [AVCaptureDeviceInput deviceInputWithDevice:self.videoDevice error:&error];
