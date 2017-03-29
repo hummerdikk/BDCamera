@@ -27,7 +27,10 @@
 #import <GLKit/GLKit.h>
 #import "BDLivePreview.h"
 
-@interface BDCamera() <AVCaptureFileOutputRecordingDelegate, AVCaptureVideoDataOutputSampleBufferDelegate>
+@interface BDCamera() <AVCaptureFileOutputRecordingDelegate, AVCaptureVideoDataOutputSampleBufferDelegate> {
+	void (^handler)(UIImage *, NSError *);
+	BOOL convertBufferToUIImage;
+}
 
 @property (nonatomic, strong, readwrite) CIContext *ciContext;
 @property (nonatomic, strong, readwrite) EAGLContext *eaglContext;
@@ -54,19 +57,27 @@
 @implementation BDCamera
 
 #pragma mark - Initialize methods -
+
 - (instancetype)initWithPreviewView:(UIView *)previewView
 {
-    return [self initWithPreviewView:previewView preset:AVCaptureSessionPresetInputPriority Mic:NO];
+    return [self initWithPreviewView:previewView preset:AVCaptureSessionPresetInputPriority microphoneRequired:NO frameWithCompletition:nil];
 }
 
-- (instancetype)initWithPreviewView:(UIView *)previewView preset:(NSString *)capturePreset Mic:(BOOL)mic
+- (instancetype)initWithPreviewView:(UIView *)previewView preset:(NSString *)capturePreset microphoneRequired:(BOOL)mic
 {
-    self = [self init];
-    if (self) {
-        _useMic = mic;
-        [self constructWithView:previewView preset:capturePreset];
-    }
-    return self;
+	return [self initWithPreviewView:previewView preset:capturePreset microphoneRequired:mic frameWithCompletition:nil];
+}
+
+- (instancetype)initWithPreviewView:(UIView *)previewView preset:(NSString *)capturePreset microphoneRequired:(BOOL)mic frameWithCompletition:(void (^)(UIImage *, NSError *))completion {
+	
+	self = [self init];
+	if (self) {
+		_useMic = mic;
+		handler = completion;
+		convertBufferToUIImage = NO;
+		[self constructWithView:previewView preset:capturePreset];
+	}
+	return self;
 }
 
 - (void)constructWithView:(UIView *)view preset:(NSString *)capturePreset
@@ -375,7 +386,20 @@
     if (self.isFaceCamera) {
        sourceImage = [sourceImage imageByApplyingTransform:CGAffineTransformTranslate(CGAffineTransformMakeScale(1, -1), 0, sourceImage.extent.size.height)];
     }
-    
+	
+	if (convertBufferToUIImage) {
+		
+		convertBufferToUIImage = NO;
+		
+		NSData *imageData = [AVCaptureStillImageOutput jpegStillImageNSDataRepresentation:sampleBuffer];
+		
+		UIImage *image = [[UIImage alloc] initWithData:imageData];
+		
+		dispatch_async(dispatch_get_main_queue(), ^(void) {
+			handler(image,nil);
+		});
+	}
+	
     CGRect sourceExtent = sourceImage.extent;
     CGFloat sourceAspect = sourceExtent.size.width / sourceExtent.size.height;
     
@@ -410,6 +434,13 @@
         }
         [feedView display];
     }
+}
+
+- (void)takeAFrameFromSampleBuffer {
+
+	if (handler) {
+		convertBufferToUIImage = YES;
+	}
 }
 
 #pragma mark - AVCaptureFileOutputRecordingDelegate

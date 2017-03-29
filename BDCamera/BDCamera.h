@@ -78,7 +78,8 @@
 /*
  Initializers
  */
-- (instancetype)initWithPreviewView:(UIView *)previewView preset:(NSString *)capturePreset Mic:(BOOL)mic;
+- (instancetype)initWithPreviewView:(UIView *)previewView preset:(NSString *)capturePreset microphoneRequired:(BOOL)mic frameWithCompletition:(void (^)(UIImage *, NSError *))completion;
+- (instancetype)initWithPreviewView:(UIView *)previewView preset:(NSString *)capturePreset microphoneRequired:(BOOL)mic;
 - (instancetype)initWithPreviewView:(UIView *)previewView;
 
 
@@ -133,5 +134,8 @@
  You can rotate camera, back of front
  */
 - (void)rotateCamera;
+
+
+- (void)takeAFrameFromSampleBuffer;
 
 @end
