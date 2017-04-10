@@ -32,7 +32,7 @@
 
 @end
 
-@interface BDCamera : NSObject
+@interface BDCamera : UIViewController
 
 /*
  This contexts will be used for live previews
@@ -90,9 +90,9 @@
 - (AVCaptureConnection *)videoCaptureConnection;
 
 /*
- Enable delegate for capturing sample buffer and output to live previews
+ Get delegate status to be abble to decide on if capturing is enbale
  */
-- (void)captureSampleBuffer:(BOOL)capture;
+- (BOOL)isDelegateSet;
 
 
 /*
@@ -136,7 +136,9 @@
  */
 - (void)rotateCamera;
 
-
-- (void)takeAFrameFromSampleBuffer;
+/*
+ Switching on and off the capturing of frames from sample buffer
+ */
+- (void)captureSampleBuffer:(BOOL)capture;
 
 @end

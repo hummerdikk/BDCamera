@@ -29,7 +29,6 @@
 
 @interface BDCamera() <AVCaptureFileOutputRecordingDelegate, AVCaptureVideoDataOutputSampleBufferDelegate> {
 	void (^handler)(UIImage *, NSError *);
-	BOOL convertBufferToUIImage;
 }
 
 @property (nonatomic, strong, readwrite) CIContext *ciContext;
@@ -84,7 +83,6 @@
 		_useMic = mic;
 		_useFileOutput = fout;
 		handler = completion;
-		convertBufferToUIImage = NO;
 		[self constructWithView:previewView preset:capturePreset];
 	}
 	
@@ -399,14 +397,10 @@
 #pragma mark - CaptureBuffer
 - (void)captureOutput:(AVCaptureOutput *)captureOutput didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer fromConnection:(AVCaptureConnection *)connection
 {
-	
-	if (!convertBufferToUIImage) return;
-	
+		
 	CVImageBufferRef imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer);
 	CIImage *sourceImage = [CIImage imageWithCVPixelBuffer:(CVPixelBufferRef)imageBuffer options:nil];
-	
-	convertBufferToUIImage = NO;
-	
+		
 	CVPixelBufferRef pixelBuffer = (CVPixelBufferRef)imageBuffer;
 	
 	CIContext *context = [CIContext contextWithOptions:nil];
@@ -430,11 +424,9 @@
 	});
 }
 
-- (void)takeAFrameFromSampleBuffer {
-
-	if (handler) {
-		convertBufferToUIImage = YES;
-	}
+- (BOOL)isDelegateSet {
+    
+    return self.videoDataOutput.sampleBufferDelegate;
 }
 
 #pragma mark - AVCaptureFileOutputRecordingDelegate
