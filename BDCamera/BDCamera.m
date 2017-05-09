@@ -414,7 +414,7 @@
 	
 	CGImageRelease(myImage);
 	
-	dispatch_async(dispatch_get_main_queue(), ^(void) {
+	dispatch_sync(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0), ^(void) {
 		
 		if (image) {
 			handler(image,nil);
@@ -426,7 +426,7 @@
 
 - (BOOL)isDelegateSet {
     
-    return self.videoDataOutput.sampleBufferDelegate;
+    return self.videoDataOutput.sampleBufferDelegate != nil;
 }
 
 #pragma mark - AVCaptureFileOutputRecordingDelegate
