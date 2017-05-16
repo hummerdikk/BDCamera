@@ -82,7 +82,9 @@
 - (instancetype)initWithPreviewView:(UIView *)previewView preset:(NSString *)capturePreset microphoneRequired:(BOOL)mic fileOutputRequired:(BOOL)fout frameWithCompletition:(void (^)(UIImage *, NSError *))completion;
 - (instancetype)initWithPreviewView:(UIView *)previewView preset:(NSString *)capturePreset microphoneRequired:(BOOL)mic fileOutputRequired:(BOOL)fout;
 - (instancetype)initWithPreviewView:(UIView *)previewView;
+- (instancetype)initWithPreset:(NSString *)capturePreset microphoneRequired:(BOOL)mic fileOutputRequired:(BOOL)fout frameWithCompletition:(void (^)(UIImage *, NSError *))completion;
 
+- (void)addPreviewToUIView:(UIView *)view;
 
 /*
  Video Capture connection

@@ -80,19 +80,42 @@
 	self = [super init];
 	
 	if (self) {
+		
 		_useMic = mic;
+		
 		_useFileOutput = fout;
+		
 		handler = completion;
-		[self constructWithView:previewView preset:capturePreset];
+		
+		[self prepareWithPreset:capturePreset];
+		
+		[self addPreviewToUIView:previewView];
 	}
 	
 	return self;
 }
 
-- (void)constructWithView:(UIView *)view preset:(NSString *)capturePreset
-{
+- (instancetype)initWithPreset:(NSString *)capturePreset microphoneRequired:(BOOL)mic fileOutputRequired:(BOOL)fout frameWithCompletition:(void (^)(UIImage *, NSError *))completion {
 	
-    self.isFaceCamera = NO;
+	self = [super init];
+	
+	if (self) {
+		
+		_useMic = mic;
+		
+		_useFileOutput = fout;
+		
+		handler = completion;
+		
+		[self prepareWithPreset:capturePreset];
+	}
+	
+	return self;
+}
+
+- (void)prepareWithPreset:(NSString *)capturePreset {
+	
+	self.isFaceCamera = NO;
 	
 	NSError *error = nil;
 	
@@ -100,54 +123,73 @@
 	
 	self.capturePreset = capturePreset;
 	
+	
 	self.captureSession = [[AVCaptureSession alloc] init];
 	
-	self.captureSession.sessionPreset = capturePreset;
-    
-    self.videoDevice = [AVCaptureDevice defaultDeviceWithMediaType:AVMediaTypeVideo];
-    self.videoInput = [AVCaptureDeviceInput deviceInputWithDevice:self.videoDevice error:&error];
-    [self.captureSession beginConfiguration];
-    if (error) {
-        NSLog(@"Video input creation failed");
-    }
-    
-    if (![self.captureSession canAddInput:self.videoInput]) {
-        NSLog(@"Video input add-to-session failed");
-    }
-    
-    [self.captureSession addInput:self.videoInput];
-    
-    self.defaultFormat = self.videoDevice.activeFormat;
-    self.defaultVideoMaxFrameDuration = self.videoDevice.activeVideoMaxFrameDuration;
-
-    if (_useMic) {
-        AVCaptureDevice *audioDevice = [AVCaptureDevice defaultDeviceWithMediaType:AVMediaTypeAudio];
-        AVCaptureDeviceInput *audioIn = [AVCaptureDeviceInput deviceInputWithDevice:audioDevice error:&error];
-        [self.captureSession addInput:audioIn];
-    }
 	
-    NSDictionary *outputSettings = @{ (id)kCVPixelBufferPixelFormatTypeKey : [NSNumber numberWithInteger:kCVPixelFormatType_32BGRA]};
+	[self.captureSession beginConfiguration];
+	
+	self.captureSession.sessionPreset = capturePreset;
+	
+	self.videoDevice = [AVCaptureDevice defaultDeviceWithMediaType:AVMediaTypeVideo];
+	
+	self.videoInput = [AVCaptureDeviceInput deviceInputWithDevice:self.videoDevice error:&error];
+
+	if (error) {
+		NSLog(@"Video input creation failed");
+	}
+	
+	if (![self.captureSession canAddInput:self.videoInput]) {
+		NSLog(@"Video input add-to-session failed");
+	}
+	
+	[self.captureSession addInput:self.videoInput];
+	
+	self.defaultFormat = self.videoDevice.activeFormat;
+	self.defaultVideoMaxFrameDuration = self.videoDevice.activeVideoMaxFrameDuration;
+
+	if (_useMic) {
+		AVCaptureDevice *audioDevice = [AVCaptureDevice defaultDeviceWithMediaType:AVMediaTypeAudio];
+		AVCaptureDeviceInput *audioIn = [AVCaptureDeviceInput deviceInputWithDevice:audioDevice error:&error];
+		[self.captureSession addInput:audioIn];
+	}
+	
+	NSDictionary *outputSettings = @{ (id)kCVPixelBufferPixelFormatTypeKey : [NSNumber numberWithInteger:kCVPixelFormatType_32BGRA]};
 	
 	self.videoDataOutput = [[AVCaptureVideoDataOutput alloc] init];
-    self.videoDataOutput.videoSettings = outputSettings;
+	self.videoDataOutput.videoSettings = outputSettings;
 	
 	[_captureSession addOutput:self.videoDataOutput];
-
+	
 	if (_useFileOutput) {
 		self.fileOutput = [[AVCaptureMovieFileOutput alloc] init];
 		[self.captureSession addOutput:self.fileOutput];
 	}
+
+	[self.captureSession commitConfiguration];
 	
-    self.previewLayer = [[AVCaptureVideoPreviewLayer alloc] initWithSession:self.captureSession];
-    self.previewLayer.frame = view.bounds;
-    self.previewLayer.contentsGravity = kCAGravityResizeAspectFill;
-    self.previewLayer.videoGravity = AVLayerVideoGravityResizeAspectFill;
+	[self setupContexts];
 	
-	[view.layer insertSublayer:self.previewLayer atIndex:0];
-    
-    [self.captureSession commitConfiguration];
-    
-    [self setupContexts];
+	self.previewLayer = [[AVCaptureVideoPreviewLayer alloc] initWithSession:self.captureSession];
+	self.previewLayer.contentsGravity = kCAGravityResizeAspectFill;
+	self.previewLayer.videoGravity = AVLayerVideoGravityResizeAspectFill;
+}
+
+- (void)addPreviewToUIView:(UIView *)view {
+
+	void (^block)() = ^{
+		
+		self.previewLayer.frame = view.bounds;
+		
+		[view.layer insertSublayer:self.previewLayer atIndex:0];
+	};
+	
+	BOOL isMainThread = [NSThread isMainThread];
+	
+	if (isMainThread)
+		block();
+	else
+		dispatch_async(dispatch_get_main_queue(), block);
 }
 
 #pragma mark - For preview copies -
@@ -260,9 +302,12 @@
 
 - (void)startCameraCapture
 {
+	printf("if elott");
     if (![self.captureSession isRunning])
 	{
+		printf("if eleje");
 		[self.captureSession startRunning];
+		printf("if vege");
 	};
 }
 
@@ -370,7 +415,8 @@
 - (void)updateOrientationWithInterfaceOrientation:(UIInterfaceOrientation)outputImageOrientation
 {
     AVCaptureConnection *connection = [self videoCaptureConnection];
-    if (connection.isVideoOrientationSupported) {
+	
+	if (connection.isVideoOrientationSupported) {
         AVCaptureVideoOrientation videoOrientation;
         switch (outputImageOrientation) {
             case UIInterfaceOrientationPortrait:
@@ -387,10 +433,10 @@
                 break;
                 
             default:
+				videoOrientation = AVCaptureVideoOrientationPortrait;
                 break;
         }
         connection.videoOrientation = videoOrientation;
-        
     }
 }
 
