@@ -86,6 +86,7 @@
                 break;
                 
             default:
+				videoOrientation = AVCaptureVideoOrientationPortrait;
                 break;
         }
         connection.videoOrientation = videoOrientation;
