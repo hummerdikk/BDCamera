@@ -302,12 +302,9 @@
 
 - (void)startCameraCapture
 {
-	printf("if elott");
     if (![self.captureSession isRunning])
 	{
-		printf("if eleje");
 		[self.captureSession startRunning];
-		printf("if vege");
 	};
 }
 
