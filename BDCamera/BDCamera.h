@@ -25,6 +25,9 @@
 
 #import <Foundation/Foundation.h>
 #import <AVFoundation/AVFoundation.h>
+#import <GLKit/GLKit.h>
+
+typedef void(^frameCompletitionBlock)(UIImage *, NSDictionary *, NSError *);
 
 @protocol BDCameraDelegate <NSObject>
 
@@ -34,11 +37,16 @@
 
 @interface BDCamera : UIViewController
 
+@property (nonatomic) id<AVCaptureVideoDataOutputSampleBufferDelegate> delegate;
+
+- (void)useDefaultDelegate;
+
 /*
  This contexts will be used for live previews
  */
 @property (nonatomic, strong, readonly) CIContext *ciContext;
 @property (nonatomic, strong, readonly) EAGLContext *eaglContext;
+@property (nonatomic, strong, readonly) GLKView * glView;
 @property (nonatomic) BOOL useMic;
 @property (nonatomic) BOOL useFileOutput;
 
@@ -76,15 +84,22 @@
 
 @property (nonatomic, weak) id<BDCameraDelegate> videoDelegate;
 
++ (instancetype)sharedCamera;
+
+
 /*
  Initializers
  */
-- (instancetype)initWithPreviewView:(UIView *)previewView preset:(NSString *)capturePreset microphoneRequired:(BOOL)mic fileOutputRequired:(BOOL)fout frameWithCompletition:(void (^)(UIImage *, NSError *))completion;
+- (instancetype)initWithPreviewView:(UIView *)previewView preset:(NSString *)capturePreset microphoneRequired:(BOOL)mic fileOutputRequired:(BOOL)fout frameWithCompletition:(frameCompletitionBlock)completion;
 - (instancetype)initWithPreviewView:(UIView *)previewView preset:(NSString *)capturePreset microphoneRequired:(BOOL)mic fileOutputRequired:(BOOL)fout;
 - (instancetype)initWithPreviewView:(UIView *)previewView;
-- (instancetype)initWithPreset:(NSString *)capturePreset microphoneRequired:(BOOL)mic fileOutputRequired:(BOOL)fout frameWithCompletition:(void (^)(UIImage *, NSError *))completion;
+- (instancetype)initWithPreset:(NSString *)capturePreset microphoneRequired:(BOOL)mic fileOutputRequired:(BOOL)fout frameWithCompletition:(frameCompletitionBlock)completion;
 
-- (void)addPreviewToUIView:(UIView *)view;
+//- (void)addPreviewToUIView:(UIView *)view;
+//- (void)removePreviewFromUIView:(UIView *)view;
+
+- (AVCaptureVideoPreviewLayer *)defaultPreviewLayer;
+- (void)applyConfigForPreviewLayer:(AVCaptureVideoPreviewLayer *)layer withCompletitionBlock:(dispatch_block_t)block;
 
 /*
  Video Capture connection
@@ -142,5 +157,7 @@
  Switching on and off the capturing of frames from sample buffer
  */
 - (void)captureSampleBuffer:(BOOL)capture;
+
+- (void)setFrameCompletitionBlock:(frameCompletitionBlock)block;
 
 @end

@@ -27,12 +27,17 @@
 #import <GLKit/GLKit.h>
 #import "BDLivePreview.h"
 
+#import <LetSeeLogger/Logger.h>
+#import <libextobjc/EXTScope.h>
+#import <LetSeeHelpers/LSSafeBlock.h>
+
 @interface BDCamera() <AVCaptureFileOutputRecordingDelegate, AVCaptureVideoDataOutputSampleBufferDelegate> {
-	void (^handler)(UIImage *, NSError *);
+	frameCompletitionBlock handler;
 }
 
 @property (nonatomic, strong, readwrite) CIContext *ciContext;
 @property (nonatomic, strong, readwrite) EAGLContext *eaglContext;
+@property (nonatomic, strong, readwrite) GLKView * glView;
 
 @property (nonatomic, strong, readwrite) AVCaptureSession *captureSession;
 @property (nonatomic, strong, readwrite) AVCaptureDevice *videoDevice;
@@ -51,11 +56,38 @@
 
 @property (nonatomic, assign) BOOL isFaceCamera;
 
+
 @end
 
 @implementation BDCamera
 
+@synthesize delegate = _delegate;
+
 #pragma mark - Initialize methods -
+
++ (instancetype)sharedCamera {
+	
+	static BDCamera *_default = nil;
+		
+	static dispatch_once_t onceToken;
+	
+	dispatch_once(&onceToken, ^{
+		
+		_default = [[BDCamera alloc] init];
+		
+		_default.useMic = NO;
+		
+		_default.useFileOutput = NO;
+		
+		_default->handler = ^(UIImage * a, NSDictionary * d, NSError * b) {};
+		
+		_default.delegate = NULL;
+		
+		[_default prepareWithPreset:AVCaptureSessionPresetMedium];
+	});
+	
+	return _default;
+}
 
 - (instancetype)initWithPreviewView:(UIView *)previewView
 {
@@ -75,7 +107,7 @@
 			   frameWithCompletition:nil];
 }
 
-- (instancetype)initWithPreviewView:(UIView *)previewView preset:(NSString *)capturePreset microphoneRequired:(BOOL)mic fileOutputRequired:(BOOL)fout frameWithCompletition:(void (^)(UIImage *, NSError *))completion {
+- (instancetype)initWithPreviewView:(UIView *)previewView preset:(NSString *)capturePreset microphoneRequired:(BOOL)mic fileOutputRequired:(BOOL)fout frameWithCompletition:(frameCompletitionBlock)completion {
 	
 	self = [super init];
 	
@@ -95,7 +127,7 @@
 	return self;
 }
 
-- (instancetype)initWithPreset:(NSString *)capturePreset microphoneRequired:(BOOL)mic fileOutputRequired:(BOOL)fout frameWithCompletition:(void (^)(UIImage *, NSError *))completion {
+- (instancetype)initWithPreset:(NSString *)capturePreset microphoneRequired:(BOOL)mic fileOutputRequired:(BOOL)fout frameWithCompletition:(frameCompletitionBlock)completion {
 	
 	self = [super init];
 	
@@ -111,6 +143,10 @@
 	}
 	
 	return self;
+}
+
+- (void)setFrameCompletitionBlock:(frameCompletitionBlock)block {
+	handler = block;
 }
 
 - (void)prepareWithPreset:(NSString *)capturePreset {
@@ -158,6 +194,7 @@
 	
 	self.videoDataOutput = [[AVCaptureVideoDataOutput alloc] init];
 	self.videoDataOutput.videoSettings = outputSettings;
+	[self.videoDataOutput setAlwaysDiscardsLateVideoFrames:YES];
 	
 	[_captureSession addOutput:self.videoDataOutput];
 	
@@ -170,18 +207,117 @@
 	
 	[self setupContexts];
 	
-	self.previewLayer = [[AVCaptureVideoPreviewLayer alloc] initWithSession:self.captureSession];
-	self.previewLayer.contentsGravity = kCAGravityResizeAspectFill;
-	self.previewLayer.videoGravity = AVLayerVideoGravityResizeAspectFill;
+//	self.previewLayer = [[AVCaptureVideoPreviewLayer alloc] initWithSession:self.captureSession];
+//	self.previewLayer.contentsGravity = kCAGravityResizeAspectFill;
+//	self.previewLayer.videoGravity = AVLayerVideoGravityResizeAspectFill;
+	
+	[self useDefaultDelegate];
+	
+	_glView = nil;
 }
 
+- (void)useDefaultDelegate {
+	_delegate = self;
+	TRACE(@"useDefaultDelegate")
+}
+
+
+- (AVCaptureVideoPreviewLayer *)defaultPreviewLayer {
+	
+	TRACE(@"defaultPreviewLayer::start")
+	
+	if (_previewLayer)
+		return _previewLayer;
+	
+	TRACE(@"defaultPreviewLayer::after_check")
+	
+	_previewLayer = [[AVCaptureVideoPreviewLayer alloc] initWithSession:self.captureSession];
+	_previewLayer.contentsGravity = kCAGravityResizeAspectFill;
+	_previewLayer.videoGravity = AVLayerVideoGravityResizeAspectFill;
+	
+	TRACE(@"defaultPreviewLayer::end")
+	
+	return _previewLayer;
+}
+
+- (void)applyConfigForPreviewLayer:(AVCaptureVideoPreviewLayer *)layer withCompletitionBlock:(dispatch_block_t)block {
+
+	TRACE(@"applyConfigForPreviewLayer::start")
+	
+	if (!layer)
+		return;
+	
+	TRACE(@"applyConfigForPreviewLayer::after_check")
+	
+	@weakify(self)
+	
+	dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0), ^(void) {
+		
+		TRACE(@"applyConfigForPreviewLayer::block::start")
+		
+		@strongify(self)
+		
+//		if (self.previewLayer)
+//			[self.previewLayer setSession:nil];
+		
+		[layer setSession:self.captureSession];
+		
+		TRACE(@"applyConfigForPreviewLayer::block::after_set_session")
+		
+		layer.contentsGravity = kCAGravityResizeAspectFill;
+		layer.videoGravity = AVLayerVideoGravityResizeAspectFill;
+			
+		AVCaptureConnection * previewLayerConnection = layer.connection;
+		
+		if ([previewLayerConnection isVideoOrientationSupported]) {
+
+			__block UIInterfaceOrientation ui_orientation;
+			AVCaptureVideoOrientation orientation;
+
+			[LSSafeBlock runBlockOnMainThreadSync:^{
+				ui_orientation = [[UIApplication sharedApplication] statusBarOrientation];
+			}];
+			
+			switch (ui_orientation) {
+					
+				case UIInterfaceOrientationPortrait:
+					orientation = AVCaptureVideoOrientationPortrait; break;
+					
+				case UIInterfaceOrientationLandscapeRight:
+					orientation = AVCaptureVideoOrientationLandscapeRight; break;
+					
+				case UIInterfaceOrientationLandscapeLeft:
+					orientation = AVCaptureVideoOrientationLandscapeLeft; break;
+					
+				default:
+					orientation = AVCaptureVideoOrientationPortrait; break;
+			}
+			
+			[previewLayerConnection setVideoOrientation:orientation];
+		}
+		
+		dispatch_async(dispatch_get_main_queue(), block);
+
+		TRACE(@"applyConfigForPreviewLayer::block::end")
+	});
+
+	_previewLayer = nil;
+	
+	_previewLayer = layer;
+	
+	TRACE(@"applyConfigForPreviewLayer::end")
+}
+
+
 - (void)addPreviewToUIView:(UIView *)view {
+	
+	__block AVCaptureVideoPreviewLayer * layer = [self defaultPreviewLayer];
 
 	void (^block)() = ^{
 		
-		self.previewLayer.frame = view.bounds;
+		layer.frame = view.bounds;
 		
-		[view.layer insertSublayer:self.previewLayer atIndex:0];
+		[view.layer insertSublayer:layer atIndex:0];
 	};
 	
 	BOOL isMainThread = [NSThread isMainThread];
@@ -191,6 +327,25 @@
 	else
 		dispatch_async(dispatch_get_main_queue(), block);
 }
+
+- (void)removePreviewFromUIView:(UIView *)view {
+	
+	if (!_previewLayer)
+		return;
+	
+	void (^block)() = ^{
+		
+		[self.previewLayer removeFromSuperlayer];
+	};
+	
+	BOOL isMainThread = [NSThread isMainThread];
+	
+	if (isMainThread)
+		block();
+	else
+		dispatch_async(dispatch_get_main_queue(), block);
+}
+
 
 #pragma mark - For preview copies -
 - (void)setupContexts
@@ -202,8 +357,10 @@
 
 - (void)captureSampleBuffer:(BOOL)capture
 {
+	LSLogVerbose(@"setSampleBufferDelegate called")
+	
     if (capture) {
-        [self.videoDataOutput setSampleBufferDelegate:self queue:_captureSessionQueue];
+        [self.videoDataOutput setSampleBufferDelegate:_delegate queue:_captureSessionQueue];
     } else {
         [self.videoDataOutput setSampleBufferDelegate:nil queue:_captureSessionQueue];
     }
@@ -441,6 +598,10 @@
 - (void)captureOutput:(AVCaptureOutput *)captureOutput didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer fromConnection:(AVCaptureConnection *)connection
 {
 		
+	CFTimeInterval cp1, cp2, cp3;
+	
+	cp1 = CACurrentMediaTime();
+	
 	CVImageBufferRef imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer);
 	CIImage *sourceImage = [CIImage imageWithCVPixelBuffer:(CVPixelBufferRef)imageBuffer options:nil];
 		
@@ -457,15 +618,33 @@
 	
 	CGImageRelease(myImage);
 	
+	cp2 = CACurrentMediaTime();
+	
+	CFDictionaryRef metadataDict;
+	NSDictionary * metadata = nil;
+	
+	metadataDict = CMCopyDictionaryOfAttachments(NULL, sampleBuffer, kCMAttachmentMode_ShouldPropagate);
+	
+	metadata = [[NSMutableDictionary alloc] initWithDictionary:(__bridge NSDictionary*)metadataDict];
+	
+	CFRelease(metadataDict);
+	
+	cp3 = CACurrentMediaTime();
+	
+//	NSLog(@"BDCAM - UIImage create [%.04f ms]", (cp2 - cp1) * 1000);
+//	NSLog(@"BDCAM - ExifBrightness [%.04f ms]", (cp3 - cp2) * 1000);
+//	NSLog(@"BDCAM - Full time [%.04f ms]", (cp3 - cp1) * 1000);
+	
 	dispatch_sync(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0), ^(void) {
 		
 		if (image) {
-			handler(image,nil);
+			self->handler(image, metadata, nil);
 		} else {
-			handler(nil, [NSError errorWithDomain:@"image is nil" code:1 userInfo:nil]);
+			self->handler(nil, nil, [NSError errorWithDomain:@"image is nil" code:1 userInfo:nil]);
 		}
 	});
 }
+
 
 - (BOOL)isDelegateSet {
     
