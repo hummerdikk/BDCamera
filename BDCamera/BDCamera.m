@@ -635,8 +635,14 @@
 //	NSLog(@"BDCAM - ExifBrightness [%.04f ms]", (cp3 - cp2) * 1000);
 //	NSLog(@"BDCAM - Full time [%.04f ms]", (cp3 - cp1) * 1000);
 	
+    @weakify(self);
 	dispatch_sync(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0), ^(void) {
 		
+        @strongify(self);
+        
+        if (!self->handler)
+            return;
+        
 		if (image) {
 			self->handler(image, metadata, nil);
 		} else {
